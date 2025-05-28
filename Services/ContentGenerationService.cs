@@ -65,14 +65,16 @@ public class ContentGenerationService : IDisposable
     public async Task<string> GenerateRoomDescriptionAsync(string roomName, string theme)
     {
         var systemPrompt = "You are a text adventure game designer. Create vivid, concise room descriptions " +
-                          "similar to those in the classic game Zork. Keep descriptions under 150 words. " +
+                          "similar to those in the classic game Zork. Keep descriptions brief, under 100 words. " +
+                          "Avoid repetitive patterns like starting descriptions with 'The air...' or similar phrases. " +
+                          "Use varied language to describe atmosphere and environments. " +
                           "Return ONLY the room description text with no additional commentary, explanations, " +
                           "formatting, or meta-text. Do not include design notes or ask questions.";
         
-        var userPrompt = $"Create a description for a room called '{roomName}' in a {theme}-themed text adventure. " +
-                        "Describe the room's appearance, atmosphere, and notable features.";
+        var userPrompt = $"Create a short, distinctive description for a room called '{roomName}' in a {theme}-themed text adventure. " +
+                        "Focus on unique characteristics rather than generic atmosphere. Be concise.";
         
-        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 500);
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 400);
         
         // Post-process the response to remove any markdown or meta-commentary
         return CleanRoomDescription(response);
