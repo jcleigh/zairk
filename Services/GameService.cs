@@ -78,6 +78,9 @@ public class GameService
         var item = GetItemFromRoom(itemName);
         if (item == null || !item.IsPickable) return false;
         
+        // Note: We don't need to check size here anymore since GetItemFromRoom
+        // already filters by size, and we only show Small/Medium items in the room
+        
         if (_gameWorld.Inventory.Count >= _gameWorld.MaxInventorySize)
         {
             return false; // Inventory is full
@@ -131,7 +134,8 @@ public class GameService
         var currentRoom = _gameWorld.CurrentRoom;
         if (currentRoom == null) return Enumerable.Empty<Item>();
         
-        return currentRoom.Items;
+        // Only return items that are small enough to be taken (Small or Medium size)
+        return currentRoom.Items.Where(item => item.Size < Size.Large);
     }
     
     /// <summary>
