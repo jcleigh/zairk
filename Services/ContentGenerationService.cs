@@ -422,6 +422,28 @@ public class ContentGenerationService : IDisposable
     }
     
     /// <summary>
+    /// Validates if an extracted item name represents an interactable object vs environmental feature
+    /// </summary>
+    private async Task<bool> ValidateItemIsInteractableAsync(string itemName, string roomDescription)
+    {
+        var systemPrompt = "You are a text adventure game validator. " +
+                          "Determine if an item name represents something a player can interact with and potentially pick up, " +
+                          "versus an environmental feature that is part of the scenery. " +
+                          "Environmental features include: ground, floors, walls, ceilings, ledges, paths, bridges, " +
+                          "cliffs, passages, corridors, doorways, openings, surfaces, formations, structures that are " +
+                          "part of the room architecture. " +
+                          "Interactable items include: objects a person could pick up, examine closely, or manipulate. " +
+                          "Respond with only 'YES' if interactable or 'NO' if environmental.";
+        
+        var userPrompt = $"Item name: '{itemName}'\nRoom context: \"{roomDescription}\"\n\n" +
+                        $"Is '{itemName}' an interactable object that a player could pick up, rather than an environmental feature?";
+        
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.3f, 50);
+        
+        return response.Trim().Equals("YES", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Extracts items mentioned in room descriptions and adds them to the item list (Issue 1)
     /// </summary>
     private async Task ExtractItemsFromRoomDescriptions(GameWorld gameWorld, string theme)
@@ -434,7 +456,7 @@ public class ContentGenerationService : IDisposable
         {
             foreach (var item in room.Items)
             {
-                allItemNames.Add(item.Name);
+                allItemNames.Add(item.Name.ToLower());
             }
         }
         
@@ -461,15 +483,22 @@ public class ContentGenerationService : IDisposable
             
             foreach (var extractedItemName in extractedItems)
             {
+                // Normalize item name to lowercase for consistency
+                var normalizedItemName = extractedItemName.ToLower();
+                
                 // Skip if we already have this item somewhere else (Issue 5)
-                if (allItemNames.Contains(extractedItemName))
+                if (allItemNames.Contains(normalizedItemName))
                     continue;
                 
                 // Skip if the room already has too many items (part of Issue 2)
                 if (room.Items.Count >= 2)
                     break;
                 
-                allItemNames.Add(extractedItemName);
+                // Validate that this is an interactable item, not an environmental feature
+                if (!await ValidateItemIsInteractableAsync(normalizedItemName, room.Description))
+                    continue;
+                
+                allItemNames.Add(normalizedItemName);
                 
                 var itemId = $"item_{room.Id}_{room.Items.Count}";
                 var random = new Random();
@@ -477,10 +506,10 @@ public class ContentGenerationService : IDisposable
                 var item = new Item
                 {
                     Id = itemId,
-                    Name = extractedItemName,
-                    Description = await GenerateItemDescriptionAsync(extractedItemName, theme, room.Description),
+                    Name = normalizedItemName,
+                    Description = await GenerateItemDescriptionAsync(normalizedItemName, theme, room.Description),
                     IsPickable = random.NextDouble() < 0.7, // 70% chance for extracted items to be pickable
-                    Size = DetermineItemSize(extractedItemName)
+                    Size = DetermineItemSize(normalizedItemName)
                 };
                 
                 room.Items.Add(item);
@@ -502,6 +531,6 @@ public class ContentGenerationService : IDisposable
                         $"If you must use an adjective, use at most one, like 'silver key' but never 'ancient silver key'.";
         
         var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 100);
-        return content.Trim();
+        return content.Trim().ToLower();
     }
 }
