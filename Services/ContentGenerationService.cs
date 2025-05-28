@@ -169,7 +169,12 @@ public class ContentGenerationService : IDisposable
         var hugeItemKeywords = new[] 
         { 
             "bridge", "wall", "statue", "boulder", "pillar", "throne", "altar", 
-            "fountain", "waterfall", "tree", "door", "gate", "archway"
+            "fountain", "waterfall", "tree", "door", "gate", "archway",
+            // Living creatures that shouldn't be pickable
+            "bird", "raven", "crow", "eagle", "hawk", "owl", "animal", "creature",
+            "person", "human", "elf", "dwarf", "orc", "goblin", "troll", "dragon",
+            "cat", "dog", "wolf", "bear", "lion", "tiger", "fox", "deer",
+            "snake", "lizard", "frog", "toad", "fish", "insect", "spider", "monster"
         };
         
         var largeItemKeywords = new[] 
@@ -422,21 +427,22 @@ public class ContentGenerationService : IDisposable
     }
     
     /// <summary>
-    /// Validates if an extracted item name represents an interactable object vs environmental feature
+    /// Validates if an extracted item name represents an interactable object vs environmental feature or living creature
     /// </summary>
     private async Task<bool> ValidateItemIsInteractableAsync(string itemName, string roomDescription)
     {
         var systemPrompt = "You are a text adventure game validator. " +
                           "Determine if an item name represents something a player can interact with and potentially pick up, " +
-                          "versus an environmental feature that is part of the scenery. " +
+                          "versus an environmental feature that is part of the scenery or a living creature. " +
                           "Environmental features include: ground, floors, walls, ceilings, ledges, paths, bridges, " +
                           "cliffs, passages, corridors, doorways, openings, surfaces, formations, structures that are " +
                           "part of the room architecture. " +
-                          "Interactable items include: objects a person could pick up, examine closely, or manipulate. " +
-                          "Respond with only 'YES' if interactable or 'NO' if environmental.";
+                          "Living creatures include: animals, birds, insects, people, monsters, or any animate beings that are alive. " +
+                          "Interactable items include: inanimate objects a person could pick up, examine closely, or manipulate. " +
+                          "Respond with only 'YES' if it's an inanimate interactable object or 'NO' if it's an environmental feature or living creature.";
         
         var userPrompt = $"Item name: '{itemName}'\nRoom context: \"{roomDescription}\"\n\n" +
-                        $"Is '{itemName}' an interactable object that a player could pick up, rather than an environmental feature?";
+                        $"Is '{itemName}' an inanimate interactable object that a player could pick up, rather than an environmental feature or living creature?";
         
         var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.3f, 50);
         
@@ -464,12 +470,13 @@ public class ContentGenerationService : IDisposable
         foreach (var room in gameWorld.Rooms.Values)
         {
             var systemPrompt = "You are a text adventure game item extractor. " +
-                             "Identify simple, concrete objects mentioned in a room description that players might want to interact with. " +
+                             "Identify simple, concrete, inanimate objects mentioned in a room description that players might want to interact with. " +
                              "Return only a comma-separated list of simple object names (1-2 words maximum). " +
                              "If no clear items are mentioned, return 'none'. " +
-                             "Focus on distinct physical objects, not features or descriptions.";
+                             "Focus on distinct physical inanimate objects, not features, descriptions, or living creatures. " +
+                             "Never include animals, people, birds, insects, or any other living beings in your list.";
             
-            var userPrompt = $"Extract a list of simple, interactable objects from this room description: \"{room.Description}\"";
+            var userPrompt = $"Extract a list of simple, interactable inanimate objects from this room description: \"{room.Description}\"";
             
             var extractedItemsText = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 100);
             
@@ -524,11 +531,13 @@ public class ContentGenerationService : IDisposable
     {
         var systemPrompt = "You are a text adventure game designer creating simple item names for a Zork-like game. " +
                           "Return only the item name with no additional text, commentary, or formatting. " +
+                          "Only suggest inanimate objects that could be picked up, never living creatures. " +
                           "Keep names very simple, preferably single words like 'lantern', 'key', or 'sword'.";
         
-        var userPrompt = $"Create a simple name for an item that might be found in a room called '{roomName}' " +
+        var userPrompt = $"Create a simple name for an inanimate item that might be found in a room called '{roomName}' " +
                         $"in a {theme}-themed text adventure. The name should ideally be a single word without adjectives. " +
-                        $"If you must use an adjective, use at most one, like 'silver key' but never 'ancient silver key'.";
+                        $"If you must use an adjective, use at most one, like 'silver key' but never 'ancient silver key'. " +
+                        $"Never suggest animals, people, or any living creatures.";
         
         var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 100);
         return content.Trim().ToLower();
