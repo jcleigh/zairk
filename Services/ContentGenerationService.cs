@@ -197,6 +197,9 @@ public class ContentGenerationService : IDisposable
         // Generate items for rooms
         await GenerateItemsAsync(gameWorld, theme);
         
+        // Extract items mentioned in room descriptions (Issue 1)
+        await ExtractItemsFromRoomDescriptions(gameWorld, theme);
+        
         return gameWorld;
     }
     
@@ -330,22 +333,99 @@ public class ContentGenerationService : IDisposable
     /// </summary>
     private async Task GenerateItemsAsync(GameWorld gameWorld, string theme)
     {
+        // Keep track of all item names to prevent duplicates (Issue 5)
+        var allItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
         foreach (var room in gameWorld.Rooms.Values)
         {
-            // Generate 0-3 items per room
-            var itemCount = new Random().Next(4);
+            // Generate 0-1 items per room (70% chance of 0, 30% chance of 1) (Issue 2)
+            // This follows Zork's design where many rooms have no items
+            var random = new Random();
+            var hasItem = random.NextDouble() < 0.3;
             
-            for (int i = 0; i < itemCount; i++)
+            if (!hasItem)
+                continue;
+            
+            var itemName = await GenerateItemNameAsync(room.Name, theme);
+            
+            // Skip if this item name already exists elsewhere (Issue 5)
+            if (allItemNames.Contains(itemName))
+                continue;
+                
+            allItemNames.Add(itemName);
+            var itemId = $"item_{room.Id}_0";
+            
+            var item = new Item
             {
-                var itemName = await GenerateItemNameAsync(room.Name, theme);
-                var itemId = $"item_{room.Id}_{i}";
+                Id = itemId,
+                Name = itemName,
+                Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
+                IsPickable = random.NextDouble() < 0.9 // 90% chance of being pickable (Issue 4)
+            };
+            
+            room.Items.Add(item);
+        }
+    }
+    
+    /// <summary>
+    /// Extracts items mentioned in room descriptions and adds them to the item list (Issue 1)
+    /// </summary>
+    private async Task ExtractItemsFromRoomDescriptions(GameWorld gameWorld, string theme)
+    {
+        // Track all existing item names to prevent duplicates
+        var allItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        // First, collect all existing item names
+        foreach (var room in gameWorld.Rooms.Values)
+        {
+            foreach (var item in room.Items)
+            {
+                allItemNames.Add(item.Name);
+            }
+        }
+        
+        // Now extract items from room descriptions
+        foreach (var room in gameWorld.Rooms.Values)
+        {
+            var systemPrompt = "You are a text adventure game item extractor. " +
+                             "Identify simple, concrete objects mentioned in a room description that players might want to interact with. " +
+                             "Return only a comma-separated list of simple object names (1-2 words maximum). " +
+                             "If no clear items are mentioned, return 'none'. " +
+                             "Focus on distinct physical objects, not features or descriptions.";
+            
+            var userPrompt = $"Extract a list of simple, interactable objects from this room description: \"{room.Description}\"";
+            
+            var extractedItemsText = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 100);
+            
+            if (string.IsNullOrWhiteSpace(extractedItemsText) || extractedItemsText.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
+                continue;
+            
+            var extractedItems = extractedItemsText.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(i => i.Trim())
+                .Where(i => !string.IsNullOrWhiteSpace(i))
+                .ToList();
+            
+            foreach (var extractedItemName in extractedItems)
+            {
+                // Skip if we already have this item somewhere else (Issue 5)
+                if (allItemNames.Contains(extractedItemName))
+                    continue;
+                
+                // Skip if the room already has too many items (part of Issue 2)
+                if (room.Items.Count >= 2)
+                    break;
+                
+                allItemNames.Add(extractedItemName);
+                
+                var itemId = $"item_{room.Id}_{room.Items.Count}";
+                var random = new Random();
                 
                 var item = new Item
                 {
                     Id = itemId,
-                    Name = itemName,
-                    Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
-                    IsPickable = new Random().Next(10) > 2 // 80% chance of being pickable
+                    Name = extractedItemName,
+                    Description = await GenerateItemDescriptionAsync(extractedItemName, theme, room.Description),
+                    IsPickable = random.NextDouble() < 0.7 // 70% chance for extracted items to be pickable
                 };
                 
                 room.Items.Add(item);
@@ -358,13 +438,13 @@ public class ContentGenerationService : IDisposable
     /// </summary>
     private async Task<string> GenerateItemNameAsync(string roomName, string theme)
     {
-        var systemPrompt = "You are a text adventure game designer creating unique and distinctive item names for a Zork-like game. " +
+        var systemPrompt = "You are a text adventure game designer creating simple item names for a Zork-like game. " +
                           "Return only the item name with no additional text, commentary, or formatting. " +
-                          "Ensure each name is specific and uniquely identifiable.";
+                          "Keep names very simple, preferably single words like 'lantern', 'key', or 'sword'.";
         
-        var userPrompt = $"Create a unique, specific name for an item that might be found in a room called '{roomName}' " +
-                        $"in a {theme}-themed text adventure. The name should be 1-3 words and distinctive enough " +
-                        $"that it would not be confused with other items. Add descriptive adjectives if needed to make it unique.";
+        var userPrompt = $"Create a simple name for an item that might be found in a room called '{roomName}' " +
+                        $"in a {theme}-themed text adventure. The name should ideally be a single word without adjectives. " +
+                        $"If you must use an adjective, use at most one, like 'silver key' but never 'ancient silver key'.";
         
         var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 100);
         return content.Trim();
