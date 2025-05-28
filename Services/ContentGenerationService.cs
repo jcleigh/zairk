@@ -453,20 +453,33 @@ public class ContentGenerationService : IDisposable
         
         DFS(startingRoom);
         
-        // Connect any unconnected rooms to the starting room
+        // Connect unconnected rooms to any connected room with available directions
         var unconnectedRooms = gameWorld.Rooms.Keys.Where(id => !visited.Contains(id)).ToList();
+        
         foreach (var roomId in unconnectedRooms)
         {
-            // Try to find a valid direction to connect the room
-            for (int i = 0; i < 6; i++)
+            bool connected = false;
+            
+            // Try to connect to any already connected room that has available directions
+            // Order by current exit count to prefer rooms with fewer connections
+            var connectedRooms = visited.OrderBy(id => gameWorld.Rooms[id].Exits.Count).ToList();
+            
+            foreach (var connectedRoomId in connectedRooms)
             {
-                var direction = (Direction)i;
-                if (IsValidConnection(gameWorld, startingRoom, direction, roomId))
+                // Try to find a valid direction to connect the room
+                for (int i = 0; i < 6; i++)
                 {
-                    gameWorld.Rooms[startingRoom].Exits[direction] = roomId;
-                    gameWorld.Rooms[roomId].Exits[direction.GetOpposite()] = startingRoom;
-                    break;
+                    var direction = (Direction)i;
+                    if (IsValidConnection(gameWorld, connectedRoomId, direction, roomId))
+                    {
+                        gameWorld.Rooms[connectedRoomId].Exits[direction] = roomId;
+                        gameWorld.Rooms[roomId].Exits[direction.GetOpposite()] = connectedRoomId;
+                        visited.Add(roomId); // Mark as connected
+                        connected = true;
+                        break;
+                    }
                 }
+                if (connected) break;
             }
         }
     }
