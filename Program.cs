@@ -168,7 +168,7 @@ public class Program
         }
         
         var exits = gameService.GetAvailableExits().Select(e => e.ToDisplayString());
-        var items = gameService.GetItemsInRoom().Select(i => i.Name).Distinct();
+        var items = gameService.GetItemsInRoom().Select(i => i.Name);
         
         ui.DisplayRoom(currentRoom.Name, currentRoom.Description, exits, items);
     }

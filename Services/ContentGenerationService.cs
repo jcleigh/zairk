@@ -351,11 +351,13 @@ public class ContentGenerationService : IDisposable
     /// </summary>
     private async Task<string> GenerateItemNameAsync(string roomName, string theme)
     {
-        var systemPrompt = "You are a text adventure game designer creating item names for a Zork-like game. " +
-                          "Return only the item name with no additional text, commentary, or formatting.";
+        var systemPrompt = "You are a text adventure game designer creating unique and distinctive item names for a Zork-like game. " +
+                          "Return only the item name with no additional text, commentary, or formatting. " +
+                          "Ensure each name is specific and uniquely identifiable.";
         
-        var userPrompt = $"Create a name for an item that might be found in a room called '{roomName}' " +
-                        $"in a {theme}-themed text adventure. The name should be 1-3 words.";
+        var userPrompt = $"Create a unique, specific name for an item that might be found in a room called '{roomName}' " +
+                        $"in a {theme}-themed text adventure. The name should be 1-3 words and distinctive enough " +
+                        $"that it would not be confused with other items. Add descriptive adjectives if needed to make it unique.";
         
         var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 100);
         return content.Trim();
