@@ -39,4 +39,9 @@ public class Item
     /// Physical size of the item (affects whether it can be picked up)
     /// </summary>
     public Size Size { get; set; } = Size.Small;
+    
+    /// <summary>
+    /// The intended purpose or use of this item (e.g., "unlock doors", "provide light", "combat")
+    /// </summary>
+    public string Purpose { get; set; } = string.Empty;
 }

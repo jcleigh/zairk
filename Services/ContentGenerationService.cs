@@ -152,6 +152,34 @@ public class ContentGenerationService : IDisposable
     }
     
     /// <summary>
+    /// Generates a description for an item with a specific purpose
+    /// </summary>
+    public async Task<string> GeneratePurposefulItemDescriptionAsync(string itemName, string purpose, string theme, string roomDescription = "")
+    {
+        var systemPrompt = "You are a text adventure game designer. Create vivid, concise object descriptions " +
+                          "similar to those in the classic game Zork. Keep descriptions under 75 words. " +
+                          "Return ONLY the item description text with no additional commentary, explanations, " +
+                          "formatting, or meta-text. Do not include design notes or ask questions. " +
+                          "Subtly hint at the item's purpose without being overly obvious.";
+        
+        var userPrompt = $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure. " +
+                        $"This item is intended to {purpose}. ";
+        
+        if (!string.IsNullOrWhiteSpace(roomDescription))
+        {
+            userPrompt += $"The item is found in a room with this description: \"{roomDescription}\". " +
+                         "Make sure the item description fits naturally with the room's atmosphere and environment. ";
+        }
+        
+        userPrompt += "Describe its appearance, material, and any notable features that subtly suggest its usefulness.";
+        
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 300);
+        
+        // Post-process the response to remove any markdown or meta-commentary
+        return CleanItemDescription(response);
+    }
+    
+    /// <summary>
     /// Cleans an item description by removing markdown formatting and meta-commentary
     /// </summary>
     private string CleanItemDescription(string description)
@@ -387,42 +415,147 @@ public class ContentGenerationService : IDisposable
     }
     
     /// <summary>
+    /// Plans purposeful items across the game world, creating items that serve specific functions
+    /// </summary>
+    private Dictionary<string, List<(string ItemType, string Purpose)>> PlanPurposefulItems(GameWorld gameWorld, string theme)
+    {
+        var itemPlan = new Dictionary<string, List<(string ItemType, string Purpose)>>();
+        
+        // Define item types and their purposes for different themes
+        var itemPurposes = new Dictionary<string, List<(string ItemType, string Purpose)>>
+        {
+            ["fantasy"] = new List<(string, string)>
+            {
+                ("lantern", "provide light in dark areas"),
+                ("key", "unlock doors and containers"),
+                ("sword", "protection and combat"),
+                ("map", "navigation and exploration"),
+                ("rope", "climbing and traversal"),
+                ("potion", "healing and restoration"),
+                ("scroll", "knowledge and spells")
+            },
+            ["sci-fi"] = new List<(string, string)>
+            {
+                ("flashlight", "provide light in dark areas"),
+                ("keycard", "unlock doors and access systems"),
+                ("scanner", "detect and analyze objects"),
+                ("battery", "power devices and equipment"),
+                ("toolkit", "repair and maintenance"),
+                ("datapad", "information and communication"),
+                ("oxygen tank", "survival in hostile environments")
+            },
+            ["horror"] = new List<(string, string)>
+            {
+                ("candle", "provide light in dark areas"),
+                ("key", "unlock doors and containers"),
+                ("crucifix", "protection from evil"),
+                ("journal", "knowledge and clues"),
+                ("matches", "create light and fire"),
+                ("medicine", "healing and recovery"),
+                ("charm", "protection and luck")
+            }
+        };
+        
+        // Get appropriate item list for theme
+        var availableItems = itemPurposes.ContainsKey(theme.ToLower()) 
+            ? itemPurposes[theme.ToLower()] 
+            : itemPurposes["fantasy"];
+        
+        // Select 3-5 item types to place across the world
+        var random = new Random();
+        var selectedItems = availableItems.OrderBy(x => random.Next()).Take(random.Next(3, 6)).ToList();
+        
+        // Distribute items across rooms, ensuring earlier rooms get items needed for later rooms
+        var roomIds = gameWorld.Rooms.Keys.OrderBy(id => int.Parse(id.Split('_')[1])).ToList();
+        
+        for (int i = 0; i < selectedItems.Count && i < roomIds.Count - 1; i++)
+        {
+            var roomId = roomIds[i];
+            if (!itemPlan.ContainsKey(roomId))
+                itemPlan[roomId] = new List<(string, string)>();
+            
+            itemPlan[roomId].Add(selectedItems[i]);
+        }
+        
+        return itemPlan;
+    }
+    
+    /// <summary>
     /// Generates items for rooms in the game world
     /// </summary>
     private async Task GenerateItemsAsync(GameWorld gameWorld, string theme)
     {
+        // First, plan purposeful items across the game world
+        var itemPlan = PlanPurposefulItems(gameWorld, theme);
+        
         // Keep track of all item names to prevent duplicates (Issue 5)
         var allItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
-        foreach (var room in gameWorld.Rooms.Values)
+        // Generate purposeful items according to the plan
+        foreach (var (roomId, plannedItems) in itemPlan)
         {
-            // Generate 0-1 items per room (70% chance of 0, 30% chance of 1) (Issue 2)
-            // This follows Zork's design where many rooms have no items
-            var random = new Random();
-            var hasItem = random.NextDouble() < 0.3;
-            
-            if (!hasItem)
-                continue;
-            
-            var itemName = await GenerateItemNameAsync(room.Name, theme);
-            
-            // Skip if this item name already exists elsewhere (Issue 5)
-            if (allItemNames.Contains(itemName))
+            if (!gameWorld.Rooms.ContainsKey(roomId))
                 continue;
                 
-            allItemNames.Add(itemName);
-            var itemId = $"item_{room.Id}_0";
+            var room = gameWorld.Rooms[roomId];
             
-            var item = new Item
+            foreach (var (itemType, purpose) in plannedItems)
             {
-                Id = itemId,
-                Name = itemName,
-                Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
-                IsPickable = random.NextDouble() < 0.9, // 90% chance of being pickable (Issue 4)
-                Size = DetermineItemSize(itemName)
-            };
-            
-            room.Items.Add(item);
+                // Skip if this item name already exists elsewhere (Issue 5)
+                if (allItemNames.Contains(itemType))
+                    continue;
+                    
+                allItemNames.Add(itemType);
+                var itemId = $"item_{room.Id}_{room.Items.Count}";
+                
+                var item = new Item
+                {
+                    Id = itemId,
+                    Name = itemType,
+                    Purpose = purpose,
+                    Description = await GeneratePurposefulItemDescriptionAsync(itemType, purpose, theme, room.Description),
+                    IsPickable = true, // Purposeful items should generally be pickable
+                    Size = DetermineItemSize(itemType)
+                };
+                
+                room.Items.Add(item);
+            }
+        }
+        
+        // Fill remaining rooms with some random items (but fewer than before)
+        var random = new Random();
+        foreach (var room in gameWorld.Rooms.Values)
+        {
+            // Only add random items if the room doesn't already have purposeful items
+            if (room.Items.Count == 0)
+            {
+                // Reduced chance of random items (20% instead of 30%)
+                var hasRandomItem = random.NextDouble() < 0.2;
+                
+                if (!hasRandomItem)
+                    continue;
+                
+                var itemName = await GenerateItemNameAsync(room.Name, theme);
+                
+                // Skip if this item name already exists elsewhere (Issue 5)
+                if (allItemNames.Contains(itemName))
+                    continue;
+                    
+                allItemNames.Add(itemName);
+                var itemId = $"item_{room.Id}_0";
+                
+                var item = new Item
+                {
+                    Id = itemId,
+                    Name = itemName,
+                    Purpose = "decoration", // Random items are mostly decorative
+                    Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
+                    IsPickable = random.NextDouble() < 0.9, // 90% chance of being pickable (Issue 4)
+                    Size = DetermineItemSize(itemName)
+                };
+                
+                room.Items.Add(item);
+            }
         }
     }
     
@@ -514,6 +647,7 @@ public class ContentGenerationService : IDisposable
                 {
                     Id = itemId,
                     Name = normalizedItemName,
+                    Purpose = "found in room", // Items extracted from descriptions are contextual
                     Description = await GenerateItemDescriptionAsync(normalizedItemName, theme, room.Description),
                     IsPickable = random.NextDouble() < 0.7, // 70% chance for extracted items to be pickable
                     Size = DetermineItemSize(normalizedItemName)
