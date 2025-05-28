@@ -501,8 +501,8 @@ public class ContentGenerationService : IDisposable
             
             foreach (var (itemType, purpose) in plannedItems)
             {
-                // Skip if this item name already exists elsewhere (Issue 5)
-                if (allItemNames.Contains(itemType))
+                // Skip if this item name or a near-duplicate already exists elsewhere (Issue 5)
+                if (HasNearDuplicate(itemType, allItemNames))
                     continue;
                     
                 allItemNames.Add(itemType);
@@ -537,8 +537,8 @@ public class ContentGenerationService : IDisposable
                 
                 var itemName = await GenerateItemNameAsync(room.Name, theme);
                 
-                // Skip if this item name already exists elsewhere (Issue 5)
-                if (allItemNames.Contains(itemName))
+                // Skip if this item name or a near-duplicate already exists elsewhere (Issue 5)
+                if (HasNearDuplicate(itemName, allItemNames))
                     continue;
                     
                 allItemNames.Add(itemName);
@@ -559,6 +559,90 @@ public class ContentGenerationService : IDisposable
         }
     }
     
+    /// <summary>
+    /// Checks if two item names are near-duplicates (e.g., singular/plural forms)
+    /// </summary>
+    private bool AreNearDuplicates(string itemName1, string itemName2)
+    {
+        // Normalize both names to lowercase for comparison
+        var name1 = itemName1.ToLower().Trim();
+        var name2 = itemName2.ToLower().Trim();
+        
+        // If they're exactly the same, they're duplicates
+        if (name1 == name2)
+            return true;
+        
+        // Check if one is the singular and the other is the plural form
+        return IsSingularPluralPair(name1, name2);
+    }
+    
+    /// <summary>
+    /// Checks if two words form a singular/plural pair
+    /// </summary>
+    private bool IsSingularPluralPair(string word1, string word2)
+    {
+        // Check both directions: word1 as singular, word2 as plural, and vice versa
+        return IsPluralOf(word2, word1) || IsPluralOf(word1, word2);
+    }
+    
+    /// <summary>
+    /// Checks if pluralWord is the plural form of singularWord
+    /// </summary>
+    private bool IsPluralOf(string pluralWord, string singularWord)
+    {
+        // Handle common English pluralization rules
+        
+        // Rule 1: Just add 's' (most common)
+        if (pluralWord == singularWord + "s")
+            return true;
+        
+        // Rule 2: Add 'es' for words ending in s, ss, sh, ch, x, z
+        if (pluralWord == singularWord + "es" && 
+            (singularWord.EndsWith("s") || singularWord.EndsWith("ss") || 
+             singularWord.EndsWith("sh") || singularWord.EndsWith("ch") || 
+             singularWord.EndsWith("x") || singularWord.EndsWith("z")))
+            return true;
+        
+        // Rule 3: Words ending in 'y' preceded by consonant: change 'y' to 'ies'
+        if (singularWord.EndsWith("y") && singularWord.Length > 1 &&
+            !IsVowel(singularWord[singularWord.Length - 2]) &&
+            pluralWord == singularWord.Substring(0, singularWord.Length - 1) + "ies")
+            return true;
+        
+        // Rule 4: Words ending in 'f' or 'fe': change to 'ves'
+        if (singularWord.EndsWith("f") && 
+            pluralWord == singularWord.Substring(0, singularWord.Length - 1) + "ves")
+            return true;
+        
+        if (singularWord.EndsWith("fe") && 
+            pluralWord == singularWord.Substring(0, singularWord.Length - 2) + "ves")
+            return true;
+        
+        // Rule 5: Words ending in 'o' preceded by consonant: add 'es'
+        if (singularWord.EndsWith("o") && singularWord.Length > 1 &&
+            !IsVowel(singularWord[singularWord.Length - 2]) &&
+            pluralWord == singularWord + "es")
+            return true;
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if a character is a vowel
+    /// </summary>
+    private bool IsVowel(char c)
+    {
+        return "aeiouAEIOU".Contains(c);
+    }
+    
+    /// <summary>
+    /// Checks if an item name has a near-duplicate in the given collection
+    /// </summary>
+    private bool HasNearDuplicate(string itemName, IEnumerable<string> existingNames)
+    {
+        return existingNames.Any(existingName => AreNearDuplicates(itemName, existingName));
+    }
+
     /// <summary>
     /// Validates if an extracted item name represents an interactable object vs environmental feature or living creature
     /// </summary>
@@ -626,8 +710,8 @@ public class ContentGenerationService : IDisposable
                 // Normalize item name to lowercase for consistency
                 var normalizedItemName = extractedItemName.ToLower();
                 
-                // Skip if we already have this item somewhere else (Issue 5)
-                if (allItemNames.Contains(normalizedItemName))
+                // Skip if we already have this item or a near-duplicate somewhere else (Issue 5)
+                if (HasNearDuplicate(normalizedItemName, allItemNames))
                     continue;
                 
                 // Skip if the room already has too many items (part of Issue 2)
