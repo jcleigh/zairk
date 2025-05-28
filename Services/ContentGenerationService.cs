@@ -65,12 +65,62 @@ public class ContentGenerationService : IDisposable
     public async Task<string> GenerateRoomDescriptionAsync(string roomName, string theme)
     {
         var systemPrompt = "You are a text adventure game designer. Create vivid, concise room descriptions " +
-                          "similar to those in the classic game Zork. Keep descriptions under 150 words.";
+                          "similar to those in the classic game Zork. Keep descriptions under 150 words. " +
+                          "Return ONLY the room description text with no additional commentary, explanations, " +
+                          "formatting, or meta-text. Do not include design notes or ask questions.";
         
         var userPrompt = $"Create a description for a room called '{roomName}' in a {theme}-themed text adventure. " +
                         "Describe the room's appearance, atmosphere, and notable features.";
         
-        return await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 500);
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 500);
+        
+        // Post-process the response to remove any markdown or meta-commentary
+        return CleanRoomDescription(response);
+    }
+    
+    /// <summary>
+    /// Cleans a room description by removing markdown formatting and meta-commentary
+    /// </summary>
+    private string CleanRoomDescription(string description)
+    {
+        // Remove markdown code blocks
+        description = System.Text.RegularExpressions.Regex.Replace(description, "```[\\s\\S]*?```", match => 
+        {
+            // Extract just the content inside the code block
+            var content = match.Value.Replace("```", "").Trim();
+            return content;
+        });
+        
+        // Remove single backticks
+        description = description.Replace("`", "");
+        
+        // Remove lines that appear to be meta-commentary
+        var lines = description.Split('\n');
+        var cleanedLines = new List<string>();
+        
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            
+            // Skip empty lines
+            if (string.IsNullOrWhiteSpace(trimmedLine))
+                continue;
+                
+            // Skip lines that look like meta-commentary
+            if (trimmedLine.StartsWith("Note:") || 
+                trimmedLine.StartsWith("Design:") || 
+                trimmedLine.StartsWith("*") ||
+                trimmedLine.StartsWith("-") ||
+                trimmedLine.StartsWith("#") ||
+                trimmedLine.StartsWith(">") ||
+                trimmedLine.Contains("Would you like") ||
+                trimmedLine.Contains("I can") && trimmedLine.Contains("?"))
+                continue;
+                
+            cleanedLines.Add(trimmedLine);
+        }
+        
+        return string.Join("\n", cleanedLines);
     }
     
     /// <summary>
@@ -79,12 +129,26 @@ public class ContentGenerationService : IDisposable
     public async Task<string> GenerateItemDescriptionAsync(string itemName, string theme)
     {
         var systemPrompt = "You are a text adventure game designer. Create vivid, concise object descriptions " +
-                          "similar to those in the classic game Zork. Keep descriptions under 75 words.";
+                          "similar to those in the classic game Zork. Keep descriptions under 75 words. " +
+                          "Return ONLY the item description text with no additional commentary, explanations, " +
+                          "formatting, or meta-text. Do not include design notes or ask questions.";
         
         var userPrompt = $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure. " +
                         "Describe its appearance, material, and any notable features.";
         
-        return await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 300);
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 300);
+        
+        // Post-process the response to remove any markdown or meta-commentary
+        return CleanItemDescription(response);
+    }
+    
+    /// <summary>
+    /// Cleans an item description by removing markdown formatting and meta-commentary
+    /// </summary>
+    private string CleanItemDescription(string description)
+    {
+        // Use the same cleaning logic as room descriptions
+        return CleanRoomDescription(description);
     }
     
     /// <summary>
@@ -133,7 +197,7 @@ public class ContentGenerationService : IDisposable
     private async Task<List<string>> GenerateRoomNamesAsync(string theme, int count)
     {
         var systemPrompt = "You are a text adventure game designer creating room names for a Zork-like game. " +
-                          "Return only a numbered list with no additional text.";
+                          "Return only a numbered list with no additional text, commentary, or formatting.";
         
         var userPrompt = $"Create {count} unique and interesting room names for a {theme}-themed text adventure. " +
                         "Each name should be brief (1-4 words) and evocative. Format as a numbered list.";
@@ -182,7 +246,8 @@ public class ContentGenerationService : IDisposable
         
         var systemPrompt = "You are a text adventure game designer creating the layout for a Zork-like game. " +
                           "Create connections between rooms using north, south, east, west, up, and down directions. " +
-                          "Return only a list of connections in the format 'RoomID Direction RoomID'.";
+                          "Return only a list of connections in the format 'RoomID Direction RoomID' with no additional text, " +
+                          "commentary, or formatting.";
         
         var userPrompt = $"Create connections between these rooms for a {theme}-themed text adventure:\n\n" +
                         $"{roomsDescription}\n\n" +
@@ -285,7 +350,7 @@ public class ContentGenerationService : IDisposable
     private async Task<string> GenerateItemNameAsync(string roomName, string theme)
     {
         var systemPrompt = "You are a text adventure game designer creating item names for a Zork-like game. " +
-                          "Return only the item name with no additional text.";
+                          "Return only the item name with no additional text, commentary, or formatting.";
         
         var userPrompt = $"Create a name for an item that might be found in a room called '{roomName}' " +
                         $"in a {theme}-themed text adventure. The name should be 1-3 words.";
