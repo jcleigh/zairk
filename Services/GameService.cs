@@ -1,3 +1,4 @@
+using System.Text;
 using ZAIrk.Models;
 
 namespace ZAIrk.Services;
@@ -139,5 +140,75 @@ public class GameService
     public IEnumerable<Item> GetInventory()
     {
         return _gameWorld.Inventory;
+    }
+    
+    /// <summary>
+    /// Generates a markdown map of the game world rooms and their connections
+    /// </summary>
+    /// <param name="filePath">Path where the map file should be saved</param>
+    /// <returns>True if the map was successfully generated and saved, false otherwise</returns>
+    public bool GenerateRoomMap(string filePath)
+    {
+        try
+        {
+            var mapBuilder = new StringBuilder();
+            
+            // Add header
+            mapBuilder.AppendLine("# Game World Map");
+            mapBuilder.AppendLine();
+            
+            // Add information about starting room
+            mapBuilder.AppendLine($"Starting Room: {_gameWorld.Rooms[_gameWorld.StartingRoomId].Name}");
+            mapBuilder.AppendLine();
+            
+            // Add all rooms and their connections
+            mapBuilder.AppendLine("## Rooms");
+            mapBuilder.AppendLine();
+            
+            foreach (var room in _gameWorld.Rooms.Values)
+            {
+                mapBuilder.AppendLine($"### {room.Name} (ID: {room.Id})");
+                mapBuilder.AppendLine();
+                mapBuilder.AppendLine(room.Description);
+                mapBuilder.AppendLine();
+                
+                // Add exits
+                if (room.Exits.Any())
+                {
+                    mapBuilder.AppendLine("#### Exits:");
+                    foreach (var exit in room.Exits)
+                    {
+                        var connectedRoom = _gameWorld.Rooms[exit.Value];
+                        mapBuilder.AppendLine($"- {exit.Key.ToDisplayString()}: {connectedRoom.Name}");
+                    }
+                }
+                else
+                {
+                    mapBuilder.AppendLine("No exits available.");
+                }
+                
+                // Add items
+                if (room.Items.Any())
+                {
+                    mapBuilder.AppendLine();
+                    mapBuilder.AppendLine("#### Items:");
+                    foreach (var item in room.Items)
+                    {
+                        mapBuilder.AppendLine($"- {item.Name}");
+                    }
+                }
+                
+                mapBuilder.AppendLine();
+            }
+            
+            // Write to file
+            File.WriteAllText(filePath, mapBuilder.ToString());
+            return true;
+        }
+        catch (Exception)
+        {
+            // If there's an error, don't crash the game
+            return false;
+        }
     }
 }

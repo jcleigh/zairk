@@ -129,4 +129,12 @@ public class CommandParserService
     {
         return command == "quit" || command == "q" || command == "exit";
     }
+    
+    /// <summary>
+    /// Checks if the input is a map command
+    /// </summary>
+    public bool IsMapCommand(string command)
+    {
+        return command == "map" || command == "m";
+    }
 }

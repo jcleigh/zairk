@@ -51,6 +51,7 @@ public class GameUI
         _output.WriteLine("  take [item]       - Pick up an item");
         _output.WriteLine("  drop [item]       - Drop an item from your inventory");
         _output.WriteLine("  inventory         - Show your inventory");
+        _output.WriteLine("  map               - Show information about the map file");
         _output.WriteLine("  help              - Display this help information");
         _output.WriteLine("  quit              - Exit the game");
         _output.WriteLine();
@@ -139,5 +140,15 @@ public class GameUI
     public void DisplayLoading(string message)
     {
         _output.WriteLine($"[{message}]");
+    }
+    
+    /// <summary>
+    /// Displays information about the map file
+    /// </summary>
+    public void DisplayMapInfo(string mapFilePath)
+    {
+        _output.WriteLine("A map of the game world has been generated.");
+        _output.WriteLine($"You can view it at: {mapFilePath}");
+        _output.WriteLine();
     }
 }
