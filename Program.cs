@@ -61,6 +61,15 @@ public class Program
         // Create command parser
         var commandParser = new CommandParserService();
         
+        // Define path for the room map
+        string mapFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "room_map.md");
+        
+        // Generate room map
+        if (gameService.GenerateRoomMap(mapFilePath))
+        {
+            ui.DisplayMessage($"Room map generated at: {mapFilePath}");
+        }
+        
         // Main game loop
         bool isRunning = true;
         
@@ -125,6 +134,10 @@ public class Program
             {
                 var inventory = gameService.GetInventory().Select(i => i.Name);
                 ui.DisplayInventory(inventory);
+            }
+            else if (commandParser.IsMapCommand(command))
+            {
+                ui.DisplayMapInfo(mapFilePath);
             }
             else if (commandParser.IsHelpCommand(command))
             {
