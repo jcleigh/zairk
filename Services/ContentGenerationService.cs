@@ -97,6 +97,7 @@ public class ContentGenerationService : IDisposable
         // Remove lines that appear to be meta-commentary
         var lines = description.Split('\n');
         var cleanedLines = new List<string>();
+        bool inMetaSection = false;
         
         foreach (var line in lines)
         {
@@ -106,20 +107,47 @@ public class ContentGenerationService : IDisposable
             if (string.IsNullOrWhiteSpace(trimmedLine))
                 continue;
                 
+            // Check for section separators
+            if (trimmedLine.StartsWith("---") || trimmedLine.StartsWith("===") || trimmedLine.StartsWith("***"))
+            {
+                inMetaSection = !inMetaSection; // Toggle the meta section flag
+                continue;
+            }
+            
             // Skip lines that look like meta-commentary
             if (trimmedLine.StartsWith("Note:") || 
                 trimmedLine.StartsWith("Design:") || 
-                trimmedLine.StartsWith("*") ||
-                trimmedLine.StartsWith("-") ||
-                trimmedLine.StartsWith("#") ||
+                trimmedLine.StartsWith("Notes on") ||
+                trimmedLine.Contains("Design Choices") ||
+                (trimmedLine.StartsWith("#") && !trimmedLine.StartsWith("# ")) || // Headers but not # as bullet point
                 trimmedLine.StartsWith(">") ||
                 trimmedLine.Contains("Would you like") ||
-                trimmedLine.Contains("I can") && trimmedLine.Contains("?"))
+                inMetaSection || // Skip lines in meta sections
+                // Skip lines that appear to be bullet points for meta comments
+                (trimmedLine.StartsWith("*") && (
+                    trimmedLine.Contains("design") || 
+                    trimmedLine.Contains("note") || 
+                    trimmedLine.Contains("feedback") || 
+                    trimmedLine.Contains("choice"))) ||
+                // Skip lines that appear to be bullet points for meta comments
+                (trimmedLine.StartsWith("-") && (
+                    trimmedLine.Contains("design") || 
+                    trimmedLine.Contains("note") || 
+                    trimmedLine.Contains("feedback") || 
+                    trimmedLine.Contains("choice"))) ||
+                // Skip lines that look like questions or offers to generate more content
+                (trimmedLine.EndsWith("?") && (
+                    trimmedLine.Contains("would you") || 
+                    trimmedLine.Contains("do you") || 
+                    trimmedLine.Contains("should I") ||
+                    trimmedLine.Contains("I can") ||
+                    trimmedLine.Contains("Let me know"))))
                 continue;
                 
             cleanedLines.Add(trimmedLine);
         }
         
+        // Join the lines, preserving paragraph structure
         return string.Join("\n", cleanedLines);
     }
     
