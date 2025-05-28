@@ -30,22 +30,16 @@ public class Program
         ui.DisplayTitle();
         ui.DisplayIntroduction();
         
-        // Get API key from environment variable or prompt the user
-        string? apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            Console.Write("Enter your OpenAI API key: ");
-            apiKey = Console.ReadLine();
-            
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                ui.DisplayError("API key is required to generate game content.");
-                return;
-            }
-        }
+        // Get Ollama configuration
+        string ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_URL") ?? "http://localhost:11434";
+        string modelName = Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "gemma2";
+        
+        ui.DisplayMessage($"Using Ollama at: {ollamaUrl}");
+        ui.DisplayMessage($"Model: {modelName}");
+        ui.DisplayMessage("");
         
         // Create content generation service
-        var contentGenerationService = new ContentGenerationService(apiKey, "gpt-4");
+        using var contentGenerationService = new ContentGenerationService(ollamaUrl, modelName);
         
         // Generate game world
         ui.DisplayLoading("Generating game world...");

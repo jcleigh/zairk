@@ -1,20 +1,62 @@
-using Azure.AI.OpenAI;
+using System.Text;
+using System.Text.Json;
 using ZAIrk.Models;
+using ZAIrk.Models.Ollama;
 
 namespace ZAIrk.Services;
 
 /// <summary>
-/// Service for generating game content using AI
+/// Service for generating game content using AI (Ollama)
 /// </summary>
-public class ContentGenerationService
+public class ContentGenerationService : IDisposable
 {
-    private readonly OpenAIClient _openAIClient;
-    private readonly string _deploymentName;
+    private readonly HttpClient _httpClient;
+    private readonly string _modelName;
+    private readonly string _baseUrl;
     
-    public ContentGenerationService(string apiKey, string deploymentName)
+    public ContentGenerationService(string baseUrl = "http://localhost:11434", string modelName = "gemma2")
     {
-        _openAIClient = new OpenAIClient(apiKey);
-        _deploymentName = deploymentName;
+        _httpClient = new HttpClient();
+        _baseUrl = baseUrl;
+        _modelName = modelName;
+    }
+    
+    public void Dispose()
+    {
+        _httpClient?.Dispose();
+    }
+    
+    /// <summary>
+    /// Makes a chat completion request to Ollama
+    /// </summary>
+    private async Task<string> GetChatCompletionAsync(string systemPrompt, string userPrompt, float temperature = 0.7f, int maxTokens = 500)
+    {
+        var request = new OllamaRequest
+        {
+            Model = _modelName,
+            Messages = new List<OllamaMessage>
+            {
+                new OllamaMessage { Role = "system", Content = systemPrompt },
+                new OllamaMessage { Role = "user", Content = userPrompt }
+            },
+            Stream = false,
+            Options = new OllamaOptions
+            {
+                Temperature = temperature,
+                NumPredict = maxTokens
+            }
+        };
+        
+        var json = JsonSerializer.Serialize(request);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        var response = await _httpClient.PostAsync($"{_baseUrl}/api/chat", content);
+        response.EnsureSuccessStatusCode();
+        
+        var responseJson = await response.Content.ReadAsStringAsync();
+        var ollamaResponse = JsonSerializer.Deserialize<OllamaResponse>(responseJson);
+        
+        return ollamaResponse?.Message?.Content ?? "";
     }
     
     /// <summary>
@@ -22,26 +64,13 @@ public class ContentGenerationService
     /// </summary>
     public async Task<string> GenerateRoomDescriptionAsync(string roomName, string theme)
     {
-        var chatCompletionsOptions = new ChatCompletionsOptions()
-        {
-            Temperature = 0.7f,
-            MaxTokens = 500
-        };
+        var systemPrompt = "You are a text adventure game designer. Create vivid, concise room descriptions " +
+                          "similar to those in the classic game Zork. Keep descriptions under 150 words.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.System,
-            "You are a text adventure game designer. Create vivid, concise room descriptions " +
-            "similar to those in the classic game Zork. Keep descriptions under 150 words."
-        ));
+        var userPrompt = $"Create a description for a room called '{roomName}' in a {theme}-themed text adventure. " +
+                        "Describe the room's appearance, atmosphere, and notable features.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.User,
-            $"Create a description for a room called '{roomName}' in a {theme}-themed text adventure. " +
-            "Describe the room's appearance, atmosphere, and notable features."
-        ));
-        
-        var response = await _openAIClient.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
-        return response.Value.Choices[0].Message.Content;
+        return await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 500);
     }
     
     /// <summary>
@@ -49,26 +78,13 @@ public class ContentGenerationService
     /// </summary>
     public async Task<string> GenerateItemDescriptionAsync(string itemName, string theme)
     {
-        var chatCompletionsOptions = new ChatCompletionsOptions()
-        {
-            Temperature = 0.7f,
-            MaxTokens = 300
-        };
+        var systemPrompt = "You are a text adventure game designer. Create vivid, concise object descriptions " +
+                          "similar to those in the classic game Zork. Keep descriptions under 75 words.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.System,
-            "You are a text adventure game designer. Create vivid, concise object descriptions " +
-            "similar to those in the classic game Zork. Keep descriptions under 75 words."
-        ));
+        var userPrompt = $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure. " +
+                        "Describe its appearance, material, and any notable features.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.User,
-            $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure. " +
-            "Describe its appearance, material, and any notable features."
-        ));
-        
-        var response = await _openAIClient.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
-        return response.Value.Choices[0].Message.Content;
+        return await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 300);
     }
     
     /// <summary>
@@ -116,26 +132,13 @@ public class ContentGenerationService
     /// </summary>
     private async Task<List<string>> GenerateRoomNamesAsync(string theme, int count)
     {
-        var chatCompletionsOptions = new ChatCompletionsOptions()
-        {
-            Temperature = 0.8f,
-            MaxTokens = 500
-        };
+        var systemPrompt = "You are a text adventure game designer creating room names for a Zork-like game. " +
+                          "Return only a numbered list with no additional text.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.System,
-            "You are a text adventure game designer creating room names for a Zork-like game. " +
-            "Return only a numbered list with no additional text."
-        ));
+        var userPrompt = $"Create {count} unique and interesting room names for a {theme}-themed text adventure. " +
+                        "Each name should be brief (1-4 words) and evocative. Format as a numbered list.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.User,
-            $"Create {count} unique and interesting room names for a {theme}-themed text adventure. " +
-            "Each name should be brief (1-4 words) and evocative. Format as a numbered list."
-        ));
-        
-        var response = await _openAIClient.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
-        var content = response.Value.Choices[0].Message.Content;
+        var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 500);
         
         // Parse the numbered list
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -174,32 +177,19 @@ public class ContentGenerationService
     /// </summary>
     private async Task GenerateRoomConnectionsAsync(GameWorld gameWorld, string theme)
     {
-        var chatCompletionsOptions = new ChatCompletionsOptions()
-        {
-            Temperature = 0.7f,
-            MaxTokens = 1000
-        };
-        
         var roomDescriptions = gameWorld.Rooms.Select(r => $"Room {r.Key}: {r.Value.Name}").ToList();
         var roomsDescription = string.Join("\n", roomDescriptions);
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.System,
-            "You are a text adventure game designer creating the layout for a Zork-like game. " +
-            "Create connections between rooms using north, south, east, west, up, and down directions. " +
-            "Return only a list of connections in the format 'RoomID Direction RoomID'."
-        ));
+        var systemPrompt = "You are a text adventure game designer creating the layout for a Zork-like game. " +
+                          "Create connections between rooms using north, south, east, west, up, and down directions. " +
+                          "Return only a list of connections in the format 'RoomID Direction RoomID'.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.User,
-            $"Create connections between these rooms for a {theme}-themed text adventure:\n\n" +
-            $"{roomsDescription}\n\n" +
-            "Each room should have 1-3 connections. Ensure all rooms are reachable from room_0. " +
-            "Format each connection as 'RoomID Direction RoomID' (e.g., 'room_0 north room_1')."
-        ));
+        var userPrompt = $"Create connections between these rooms for a {theme}-themed text adventure:\n\n" +
+                        $"{roomsDescription}\n\n" +
+                        "Each room should have 1-3 connections. Ensure all rooms are reachable from room_0. " +
+                        "Format each connection as 'RoomID Direction RoomID' (e.g., 'room_0 north room_1').";
         
-        var response = await _openAIClient.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
-        var content = response.Value.Choices[0].Message.Content;
+        var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 1000);
         
         // Parse the connections
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -294,25 +284,13 @@ public class ContentGenerationService
     /// </summary>
     private async Task<string> GenerateItemNameAsync(string roomName, string theme)
     {
-        var chatCompletionsOptions = new ChatCompletionsOptions()
-        {
-            Temperature = 0.8f,
-            MaxTokens = 100
-        };
+        var systemPrompt = "You are a text adventure game designer creating item names for a Zork-like game. " +
+                          "Return only the item name with no additional text.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.System,
-            "You are a text adventure game designer creating item names for a Zork-like game. " +
-            "Return only the item name with no additional text."
-        ));
+        var userPrompt = $"Create a name for an item that might be found in a room called '{roomName}' " +
+                        $"in a {theme}-themed text adventure. The name should be 1-3 words.";
         
-        chatCompletionsOptions.Messages.Add(new ChatMessage(
-            ChatRole.User,
-            $"Create a name for an item that might be found in a room called '{roomName}' " +
-            $"in a {theme}-themed text adventure. The name should be 1-3 words."
-        ));
-        
-        var response = await _openAIClient.GetChatCompletionsAsync(_deploymentName, chatCompletionsOptions);
-        return response.Value.Choices[0].Message.Content.Trim();
+        var content = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.8f, 100);
+        return content.Trim();
     }
 }
