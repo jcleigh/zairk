@@ -372,14 +372,63 @@ public class ContentGenerationService : IDisposable
                 var fromRoomId = parts[0];
                 var toRoomId = parts[2];
                 
-                // Add connections in both directions
-                gameWorld.Rooms[fromRoomId].Exits[direction] = toRoomId;
-                gameWorld.Rooms[toRoomId].Exits[direction.GetOpposite()] = fromRoomId;
+                // Validate the connection to prevent circular references
+                if (IsValidConnection(gameWorld, fromRoomId, direction, toRoomId))
+                {
+                    // Add connections in both directions
+                    gameWorld.Rooms[fromRoomId].Exits[direction] = toRoomId;
+                    gameWorld.Rooms[toRoomId].Exits[direction.GetOpposite()] = fromRoomId;
+                }
             }
         }
         
         // Ensure all rooms are connected
         EnsureAllRoomsAreConnected(gameWorld);
+    }
+    
+    /// <summary>
+    /// Validates a connection to prevent circular references and conflicting connections
+    /// </summary>
+    private bool IsValidConnection(GameWorld gameWorld, string fromRoomId, Direction direction, string toRoomId)
+    {
+        // Prevent self-connections
+        if (fromRoomId == toRoomId)
+            return false;
+            
+        var fromRoom = gameWorld.Rooms[fromRoomId];
+        var toRoom = gameWorld.Rooms[toRoomId];
+        var oppositeDirection = direction.GetOpposite();
+        
+        // Check if fromRoom already has an exit in this direction
+        if (fromRoom.Exits.ContainsKey(direction))
+        {
+            // If it connects to the same room, it's valid (already exists)
+            if (fromRoom.Exits[direction] == toRoomId)
+                return true;
+            // If it connects to a different room, don't overwrite
+            return false;
+        }
+        
+        // Check if toRoom already has an exit in the opposite direction
+        if (toRoom.Exits.ContainsKey(oppositeDirection))
+        {
+            // If it connects to the same room, it's valid (already exists)
+            if (toRoom.Exits[oppositeDirection] == fromRoomId)
+                return true;
+            // If it connects to a different room, don't overwrite
+            return false;
+        }
+        
+        // Check for potential circular references by ensuring this connection
+        // doesn't create a situation where both rooms connect to each other
+        // in the same direction (which would be invalid)
+        if (toRoom.Exits.ContainsKey(direction) && toRoom.Exits[direction] == fromRoomId)
+        {
+            // This would create: A -> B and B -> A in the same direction, which is invalid
+            return false;
+        }
+        
+        return true;
     }
     
     /// <summary>
@@ -408,9 +457,17 @@ public class ContentGenerationService : IDisposable
         var unconnectedRooms = gameWorld.Rooms.Keys.Where(id => !visited.Contains(id)).ToList();
         foreach (var roomId in unconnectedRooms)
         {
-            var direction = (Direction)(new Random().Next(6)); // Random direction
-            gameWorld.Rooms[startingRoom].Exits[direction] = roomId;
-            gameWorld.Rooms[roomId].Exits[direction.GetOpposite()] = startingRoom;
+            // Try to find a valid direction to connect the room
+            for (int i = 0; i < 6; i++)
+            {
+                var direction = (Direction)i;
+                if (IsValidConnection(gameWorld, startingRoom, direction, roomId))
+                {
+                    gameWorld.Rooms[startingRoom].Exits[direction] = roomId;
+                    gameWorld.Rooms[roomId].Exits[direction.GetOpposite()] = startingRoom;
+                    break;
+                }
+            }
         }
     }
     
