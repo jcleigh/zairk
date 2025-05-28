@@ -161,6 +161,59 @@ public class ContentGenerationService : IDisposable
     }
     
     /// <summary>
+    /// Determines the size of an item based on its name
+    /// </summary>
+    private Size DetermineItemSize(string itemName)
+    {
+        // List of keywords that suggest large objects that shouldn't be pickable
+        var hugeItemKeywords = new[] 
+        { 
+            "bridge", "wall", "statue", "boulder", "pillar", "throne", "altar", 
+            "fountain", "waterfall", "tree", "door", "gate", "archway"
+        };
+        
+        var largeItemKeywords = new[] 
+        { 
+            "table", "desk", "chair", "bed", "shelf", "chest", "trunk", 
+            "cabinet", "bench", "stool"
+        };
+        
+        var mediumItemKeywords = new[] 
+        { 
+            "book", "lamp", "lantern", "vase", "pot", "pan", "jug", 
+            "staff", "sword", "shield", "helmet", "boots"
+        };
+        
+        // Check against keywords - case insensitive
+        foreach (var keyword in hugeItemKeywords)
+        {
+            if (itemName.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return Size.Huge;
+            }
+        }
+        
+        foreach (var keyword in largeItemKeywords)
+        {
+            if (itemName.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return Size.Large;
+            }
+        }
+        
+        foreach (var keyword in mediumItemKeywords)
+        {
+            if (itemName.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return Size.Medium;
+            }
+        }
+        
+        // Default to small
+        return Size.Small;
+    }
+    
+    /// <summary>
     /// Generates a complete game world with rooms and items
     /// </summary>
     public async Task<GameWorld> GenerateGameWorldAsync(string theme, int numberOfRooms = 10)
@@ -360,7 +413,8 @@ public class ContentGenerationService : IDisposable
                 Id = itemId,
                 Name = itemName,
                 Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
-                IsPickable = random.NextDouble() < 0.9 // 90% chance of being pickable (Issue 4)
+                IsPickable = random.NextDouble() < 0.9, // 90% chance of being pickable (Issue 4)
+                Size = DetermineItemSize(itemName)
             };
             
             room.Items.Add(item);
@@ -425,7 +479,8 @@ public class ContentGenerationService : IDisposable
                     Id = itemId,
                     Name = extractedItemName,
                     Description = await GenerateItemDescriptionAsync(extractedItemName, theme, room.Description),
-                    IsPickable = random.NextDouble() < 0.7 // 70% chance for extracted items to be pickable
+                    IsPickable = random.NextDouble() < 0.7, // 70% chance for extracted items to be pickable
+                    Size = DetermineItemSize(extractedItemName)
                 };
                 
                 room.Items.Add(item);

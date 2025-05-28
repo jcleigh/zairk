@@ -102,7 +102,12 @@ public class Program
             }
             else if (commandParser.IsTakeCommand(command, arguments, out var takeItemName))
             {
-                if (gameService.TakeItem(takeItemName))
+                var item = gameService.GetItemFromRoom(takeItemName);
+                if (item != null && item.Size >= Size.Large)
+                {
+                    ui.DisplayMessage($"The {takeItemName} is too large to carry.");
+                }
+                else if (gameService.TakeItem(takeItemName))
                 {
                     ui.DisplayMessage($"You take the {takeItemName}.");
                 }

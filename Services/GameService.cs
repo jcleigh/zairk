@@ -78,6 +78,9 @@ public class GameService
         var item = GetItemFromRoom(itemName);
         if (item == null || !item.IsPickable) return false;
         
+        // Check if the item is too large to pick up
+        if (item.Size >= Size.Large) return false;
+        
         if (_gameWorld.Inventory.Count >= _gameWorld.MaxInventorySize)
         {
             return false; // Inventory is full

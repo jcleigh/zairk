@@ -34,4 +34,9 @@ public class Item
     /// Weight of the item (may affect inventory capacity)
     /// </summary>
     public int Weight { get; set; } = 1;
+    
+    /// <summary>
+    /// Physical size of the item (affects whether it can be picked up)
+    /// </summary>
+    public Size Size { get; set; } = Size.Small;
 }
