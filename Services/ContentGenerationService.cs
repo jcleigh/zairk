@@ -128,15 +128,22 @@ public class ContentGenerationService : IDisposable
     /// <summary>
     /// Generates an item description using AI
     /// </summary>
-    public async Task<string> GenerateItemDescriptionAsync(string itemName, string theme)
+    public async Task<string> GenerateItemDescriptionAsync(string itemName, string theme, string roomDescription = "")
     {
         var systemPrompt = "You are a text adventure game designer. Create vivid, concise object descriptions " +
                           "similar to those in the classic game Zork. Keep descriptions under 75 words. " +
                           "Return ONLY the item description text with no additional commentary, explanations, " +
                           "formatting, or meta-text. Do not include design notes or ask questions.";
         
-        var userPrompt = $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure. " +
-                        "Describe its appearance, material, and any notable features.";
+        var userPrompt = $"Create a description for an item called '{itemName}' in a {theme}-themed text adventure.";
+        
+        if (!string.IsNullOrWhiteSpace(roomDescription))
+        {
+            userPrompt += $" The item is found in a room with this description: \"{roomDescription}\". " +
+                         "Make sure the item description fits naturally with the room's atmosphere and environment.";
+        }
+        
+        userPrompt += " Describe its appearance, material, and any notable features.";
         
         var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.7f, 300);
         
@@ -337,7 +344,7 @@ public class ContentGenerationService : IDisposable
                 {
                     Id = itemId,
                     Name = itemName,
-                    Description = await GenerateItemDescriptionAsync(itemName, theme),
+                    Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
                     IsPickable = new Random().Next(10) > 2 // 80% chance of being pickable
                 };
                 
