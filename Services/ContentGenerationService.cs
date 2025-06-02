@@ -741,6 +741,37 @@ public class ContentGenerationService : IDisposable
     }
 
     /// <summary>
+    /// Validates the size of an item using LLM based on item name and room description context
+    /// </summary>
+    private async Task<Size> ValidateItemSizeAsync(string itemName, string roomDescription)
+    {
+        var systemPrompt = "You are a text adventure game item size validator. " +
+                          "Determine the physical size category of an item based on its name and context description. " +
+                          "Consider any size descriptors (like colossal, massive, tiny, small, large, huge, enormous, etc.) in the description. " +
+                          "Size categories are: " +
+                          "SMALL - easily carried items like keys, coins, jewelry, small tools, scrolls " +
+                          "MEDIUM - items that can be carried but take space like books, lamps, weapons, armor pieces " +
+                          "LARGE - difficult to carry items like furniture, large chests, heavy equipment " +
+                          "HUGE - items that cannot be physically carried like statues, boulders, architectural features, colossal objects " +
+                          "Respond with only one word: SMALL, MEDIUM, LARGE, or HUGE.";
+        
+        var userPrompt = $"Item name: '{itemName}'\nRoom context: \"{roomDescription}\"\n\n" +
+                        $"What size category is '{itemName}' based on the context?";
+        
+        var response = await GetChatCompletionAsync(systemPrompt, userPrompt, 0.3f, 50);
+        
+        var sizeText = response.Trim().ToUpper();
+        return sizeText switch
+        {
+            "SMALL" => Size.Small,
+            "MEDIUM" => Size.Medium,
+            "LARGE" => Size.Large,
+            "HUGE" => Size.Huge,
+            _ => Size.Small // Default fallback
+        };
+    }
+
+    /// <summary>
     /// Extracts items mentioned in room descriptions and adds them to the item list (Issue 1)
     /// </summary>
     private async Task ExtractItemsFromRoomDescriptions(GameWorld gameWorld, string theme)
@@ -796,12 +827,17 @@ public class ContentGenerationService : IDisposable
                 if (!await ValidateItemIsInteractableAsync(normalizedItemName, room.Description))
                     continue;
                 
+                // Use LLM to dynamically validate item size based on context
+                var itemSize = await ValidateItemSizeAsync(normalizedItemName, room.Description);
+                
+                // Skip items that are too large to be listed (Large or Huge items should not appear in room lists)
+                if (itemSize >= Size.Large)
+                    continue;
+                
                 allItemNames.Add(normalizedItemName);
                 
                 var itemId = $"item_{room.Id}_{room.Items.Count}";
                 var random = new Random();
-                
-                var itemSize = DetermineItemSize(normalizedItemName);
                 
                 var item = new Item
                 {
