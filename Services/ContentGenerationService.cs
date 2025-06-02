@@ -197,7 +197,7 @@ public class ContentGenerationService : IDisposable
         var hugeItemKeywords = new[] 
         { 
             "bridge", "wall", "statue", "boulder", "pillar", "throne", "altar", 
-            "fountain", "waterfall", "tree", "door", "gate", "archway",
+            "fountain", "waterfall", "tree", "door", "gate", "archway", "wheel",
             // Living creatures that shouldn't be pickable
             "bird", "raven", "crow", "eagle", "hawk", "owl", "animal", "creature",
             "person", "human", "elf", "dwarf", "orc", "goblin", "troll", "dragon",
@@ -208,7 +208,7 @@ public class ContentGenerationService : IDisposable
         var largeItemKeywords = new[] 
         { 
             "table", "desk", "chair", "bed", "shelf", "chest", "trunk", 
-            "cabinet", "bench", "stool"
+            "cabinet", "bench", "stool", "pew", "stove", "barrel"
         };
         
         var mediumItemKeywords = new[] 
@@ -578,14 +578,16 @@ public class ContentGenerationService : IDisposable
                 allItemNames.Add(itemType);
                 var itemId = $"item_{room.Id}_{room.Items.Count}";
                 
+                var itemSize = DetermineItemSize(itemType);
+                
                 var item = new Item
                 {
                     Id = itemId,
                     Name = itemType,
                     Purpose = purpose,
                     Description = await GeneratePurposefulItemDescriptionAsync(itemType, purpose, theme, room.Description),
-                    IsPickable = true, // Purposeful items should generally be pickable
-                    Size = DetermineItemSize(itemType)
+                    IsPickable = itemSize < Size.Large, // Only Small/Medium items can be pickable
+                    Size = itemSize
                 };
                 
                 room.Items.Add(item);
@@ -614,14 +616,16 @@ public class ContentGenerationService : IDisposable
                 allItemNames.Add(itemName);
                 var itemId = $"item_{room.Id}_0";
                 
+                var itemSize = DetermineItemSize(itemName);
+                
                 var item = new Item
                 {
                     Id = itemId,
                     Name = itemName,
                     Purpose = "decoration", // Random items are mostly decorative
                     Description = await GenerateItemDescriptionAsync(itemName, theme, room.Description),
-                    IsPickable = random.NextDouble() < 0.9, // 90% chance of being pickable (Issue 4)
-                    Size = DetermineItemSize(itemName)
+                    IsPickable = itemSize < Size.Large && random.NextDouble() < 0.9, // Only Small/Medium items can be pickable
+                    Size = itemSize
                 };
                 
                 room.Items.Add(item);
@@ -797,14 +801,16 @@ public class ContentGenerationService : IDisposable
                 var itemId = $"item_{room.Id}_{room.Items.Count}";
                 var random = new Random();
                 
+                var itemSize = DetermineItemSize(normalizedItemName);
+                
                 var item = new Item
                 {
                     Id = itemId,
                     Name = normalizedItemName,
                     Purpose = "found in room", // Items extracted from descriptions are contextual
                     Description = await GenerateItemDescriptionAsync(normalizedItemName, theme, room.Description),
-                    IsPickable = random.NextDouble() < 0.7, // 70% chance for extracted items to be pickable
-                    Size = DetermineItemSize(normalizedItemName)
+                    IsPickable = itemSize < Size.Large && random.NextDouble() < 0.7, // Only Small/Medium items can be pickable
+                    Size = itemSize
                 };
                 
                 room.Items.Add(item);
